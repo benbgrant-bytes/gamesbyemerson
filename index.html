@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Games by Emerson</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -60,6 +60,12 @@
   .row.locked{opacity:.62}
   @keyframes blink{0%,55%{opacity:1}56%,100%{opacity:0}}
 
+  @media (max-width:600px){
+    h1{font-size:clamp(30px,9vw,44px)}
+    .row{padding:15px 0 15px 24px;font-size:20px}
+    .row .state{font-size:15px}
+    .note{font-size:15px}
+  }
   .note{margin-top:26px; font-size:14px; line-height:1.5; color:var(--dim)}
   .note kbd{font-family:'Barlow Condensed'; font-size:13px; padding:1px 7px;
     border:1px solid var(--line); color:var(--paper)}
@@ -77,9 +83,9 @@
     <li><a class="row open sel" href="hollow.html">
       <span class="num">01</span><span class="name">Hollow</span>
       <span class="dots"></span><span class="state">Play</span></a></li>
-    <li><span class="row locked">
-      <span class="num">02</span><span class="name">Untitled</span>
-      <span class="dots"></span><span class="state">Empty</span></span></li>
+    <li><a class="row open" href="center.html">
+      <span class="num">02</span><span class="name">The Center</span>
+      <span class="dots"></span><span class="state">Play</span></a></li>
     <li><span class="row locked">
       <span class="num">03</span><span class="name">Untitled</span>
       <span class="dots"></span><span class="state">Empty</span></span></li>
@@ -88,7 +94,7 @@
       <span class="dots"></span><span class="state">Empty</span></span></li>
   </ul>
 
-  <p class="note"><kbd>&uarr;</kbd> <kbd>&darr;</kbd> to choose, <kbd>Enter</kbd> to play. Or just click.</p>
+  <p class="note" id="note"><kbd>&uarr;</kbd> <kbd>&darr;</kbd> to choose, <kbd>Enter</kbd> to play. Or just click.</p>
   <footer>One hundred doors and counting</footer>
 </div>
 
@@ -115,7 +121,14 @@
   });
   rows.forEach(function(r, n){
     r.addEventListener('mouseenter', function(){ select(n); });
+    r.addEventListener('touchstart', function(){ select(n); }, {passive:true});
   });
+
+  // phones have no arrow keys; say something useful instead
+  if(window.matchMedia && window.matchMedia('(pointer: coarse)').matches){
+    var note = document.getElementById('note');
+    if(note) note.textContent = 'Tap a game to play.';
+  }
 </script>
 </body>
 </html>
