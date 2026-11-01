@@ -787,8 +787,7 @@ function makeDoor(room){
     // scene, so the blinding light at the end never actually appeared.
     const L = new THREE.PointLight(0xffffff, 0, 34, 1.0);
     L.position.set(ep.x + nd.x*2.6, 2.0, ep.y + nd.y*2.6);
-    g.add(L);
-    room.exitLight = L;
+    room.exitLight = L;          // buildRoom adds it: makeDoor has no group here
   }
 
   room.doorPivot = pivot;
@@ -940,6 +939,7 @@ function buildRoom(room){
 
   const dp = makeDoor(room);
   g.add(dp[0]); g.add(dp[1]);
+  if(room.exitLight) g.add(room.exitLight);
   for(let k=0;k<room.closets.length;k++) g.add(makeCloset(room.closets[k]));
   for(let k=0;k<room.furniture.length;k++) g.add(makeDresser(room.furniture[k]));
   for(let k=0;k<room.wastes.length;k++) g.add(makeWaste(room.wastes[k]));
