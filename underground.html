@@ -729,21 +729,19 @@ function makeDoor(room){
   pivot.rotation.y = Math.atan2(-side.y, side.x);
   room.baseRot = pivot.rotation.y;
 
-  // an iron gate: you can see straight through it, which is the whole point outdoors
-  const bars = room.yard ? 9 : 7;
-  for(let i=0;i<bars;i++){
-    const t = (i+0.5)/bars;
-    const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.045,0.045,CFG.DH-0.1,6), MAT.iron);
-    bar.position.set(-CFG.DW*t, (CFG.DH-0.1)/2, 0); pivot.add(bar);
+  // a solid door down here: banded timber on an iron frame. Nothing to see through.
+  const leaf = new THREE.Mesh(new THREE.BoxGeometry(CFG.DW, CFG.DH, 0.16), MAT.wood);
+  leaf.position.set(-CFG.DW/2, CFG.DH/2, 0); pivot.add(leaf);
+  for(let i=0;i<3;i++){
+    const band = new THREE.Mesh(new THREE.BoxGeometry(CFG.DW-0.08, 0.16, 0.2), MAT.iron);
+    band.position.set(-CFG.DW/2, 0.5+i*1.1, 0.02); pivot.add(band);
+    for(const sx of [-1,1]){
+      const rv = new THREE.Mesh(new THREE.SphereGeometry(0.05,5,4), MAT.brass);
+      rv.position.set(-CFG.DW/2 + sx*(CFG.DW/2-0.18), 0.5+i*1.1, 0.13); pivot.add(rv);
+    }
   }
-  for(const y of [0.12, CFG.DH*0.52, CFG.DH-0.12]){
-    const rail = new THREE.Mesh(new THREE.BoxGeometry(CFG.DW,0.1,0.09), MAT.iron);
-    rail.position.set(-CFG.DW/2, y, 0); pivot.add(rail);
-  }
-  for(let i=0;i<4;i++){                       // spear tips along the top
-    const sp = new THREE.Mesh(new THREE.ConeGeometry(0.075,0.3,4), MAT.iron);
-    sp.position.set(-CFG.DW*(i+0.5)/4, CFG.DH+0.08, 0); pivot.add(sp);
-  }
+  const hinge = new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,CFG.DH-0.2,6), MAT.iron2);
+  hinge.position.set(-0.06, CFG.DH/2, 0); pivot.add(hinge);
   const latch = new THREE.Mesh(new THREE.BoxGeometry(0.14,0.3,0.12), MAT.brass);
   latch.position.set(-CFG.DW*0.9, 1.15, 0.08); pivot.add(latch);
 
@@ -863,43 +861,56 @@ function buildRoom(room){
   const fl = new THREE.Mesh(fg, P.floor);
   fl.rotation.x = -Math.PI/2; fl.position.set(room.center.x, 0.01, room.center.y); g.add(fl);
 
-  // no ceiling out here. a lamp post stands in the middle of the yard instead.
-  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.13,3.9,7), MAT.iron);
-  post.position.set(room.center.x, 1.95, room.center.y); g.add(post);
-  const arm = new THREE.Mesh(new THREE.BoxGeometry(0.1,0.1,0.5), MAT.iron);
-  arm.position.set(room.center.x, 3.85, room.center.y); g.add(arm);
-  const hood = new THREE.Mesh(new THREE.ConeGeometry(0.42,0.34,6), MAT.iron2);
-  hood.position.set(room.center.x, 4.14, room.center.y); g.add(hood);
-  const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.24,10,8), MAT.glow);
-  lamp.position.set(room.center.x, 3.74, room.center.y); g.add(lamp);
-  room.lampMesh = lamp;
-  room.lampPos = new THREE.Vector3(room.center.x, 3.6, room.center.y);
+  // a rock ceiling, low over your head
+  const ce = new THREE.Mesh(new THREE.PlaneGeometry(sx,sz), P.ceil);
+  ce.rotation.x = Math.PI/2; ce.position.set(room.center.x, CFG.H, room.center.y); g.add(ce);
 
-  // trees and benches crowded against the walls
-  const trng = mulberry32(room.i*7717 + 91);
-  const nT = room.yard ? 10 : 3;
-  for(let k=0;k<nT;k++){
-    const u = (trng()-0.5)*(along-3.4), v = (trng()<0.5?-1:1)*(across/2 - 1.0 - trng()*0.7);
-    const tp = room.center.clone().addScaledVector(d, u).addScaledVector(perp, v);
-    const tr = new THREE.Mesh(new THREE.CylinderGeometry(0.17,0.26,2.5,6), MAT.bark);
-    tr.position.set(tp.x, 1.25, tp.y); g.add(tr);
-    for(let q=0;q<3;q++){
-      const cr = new THREE.Mesh(new THREE.SphereGeometry(0.95-q*0.16,7,6), MAT.leaf);
-      cr.position.set(tp.x+(trng()-0.5)*0.7, 2.7+q*0.55, tp.y+(trng()-0.5)*0.7);
-      cr.scale.y = 0.8; g.add(cr);
+  // lanterns bolted to the rock at head height, down both walls
+  const lrng = mulberry32(room.i*7717 + 91);
+  const nL = Math.max(2, Math.round(along/9));
+  for(let k=0;k<nL;k++){
+    const t = (k+0.5)/nL;
+    const side = (k%2) ? 1 : -1;
+    const lp = room.p.clone().addScaledVector(d, along*t)
+                             .addScaledVector(perp, side*(across/2 - 0.3));
+    const bracket = new THREE.Mesh(new THREE.BoxGeometry(0.42,0.08,0.08), MAT.iron);
+    bracket.position.set(lp.x, 3.0, lp.y);
+    bracket.rotation.y = Math.atan2(perp.x*side, perp.y*side);
+    g.add(bracket);
+    const cage = new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.26,0.44,6), MAT.iron2);
+    cage.position.set(lp.x - perp.x*side*0.34, 2.82, lp.y - perp.y*side*0.34); g.add(cage);
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.15,8,6), MAT.glow);
+    bulb.position.copy(cage.position); g.add(bulb);
+    if(k===0){ room.lampMesh = bulb;
+      room.lampPos = new THREE.Vector3(bulb.position.x, 2.7, bulb.position.z); }
+  }
+  if(!room.lampPos) room.lampPos = new THREE.Vector3(room.center.x, 3.0, room.center.y);
+
+  // props against the walls: pit props and tipped mine carts, no trees down here
+  const nP = room.yard ? 8 : 3;
+  for(let k=0;k<nP;k++){
+    const u = (lrng()-0.5)*(along-3.4), v = (lrng()<0.5?-1:1)*(across/2 - 0.8 - lrng()*0.5);
+    const pp = room.center.clone().addScaledVector(d, u).addScaledVector(perp, v);
+    if(lrng() < 0.6){
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.17,0.19,CFG.H,6), MAT.bark);
+      post.position.set(pp.x, CFG.H/2, pp.y); g.add(post);
+      const cap = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.18,0.5), MAT.bark);
+      cap.position.set(pp.x, CFG.H-0.1, pp.y); g.add(cap);
+    } else {
+      const heap = new THREE.Mesh(new THREE.SphereGeometry(0.6+lrng()*0.4,7,6), P.floor);
+      heap.scale.y = 0.45; heap.position.set(pp.x, 0.2, pp.y); g.add(heap);
     }
   }
 
   if(room.finalRoom){
-    // the way in: two doors, taller than the tunnel
-    const nearC = room.p.clone();
+    // the way in: two doors, taller than the tunnel, one either side of the opening
     const bd = [], base = [];
     for(const sgn of [-1, 1]){
       const pv = new THREE.Object3D();
-      pv.position.set(nearC.x + perp.x*sgn*0.1, 0, nearC.y + perp.y*sgn*0.1);
+      pv.position.set(room.p.x + perp.x*sgn*0.1, 0, room.p.y + perp.y*sgn*0.1);
       pv.rotation.y = Math.atan2(perp.x*sgn, perp.y*sgn);
-      const leaf = new THREE.Mesh(new THREE.BoxGeometry(3.0, 6.2, 0.3), MAT.wood);
-      leaf.position.set(1.5, 3.1, 0); pv.add(leaf);
+      const dleaf = new THREE.Mesh(new THREE.BoxGeometry(3.0, 6.2, 0.3), MAT.wood);
+      dleaf.position.set(1.5, 3.1, 0); pv.add(dleaf);
       for(let i=0;i<4;i++){
         const band = new THREE.Mesh(new THREE.BoxGeometry(2.9,0.22,0.36), MAT.iron);
         band.position.set(1.5, 0.8+i*1.5, 0); pv.add(band);
@@ -929,7 +940,7 @@ function doorwayBox(room){
 }
 
 /* ================================ entities ================================ */
-let burstMesh=null, vortexMesh=null, camoMesh=null, scrapeMesh=null, roamer=null, wastes=[];
+let burstMesh=null, vortexMesh=null, camoMesh=null, scrapeMesh=null, wastes=[];
 let xstructMesh=null, darkMesh=null;
 
 /* Burst, from Emerson's drawing: a fireball. A spiked corona with two angry
@@ -1081,66 +1092,6 @@ function makeLocker(lk){
   g.add(pivot); lk.pivot = pivot; lk.angle = 0;
   g.position.set(lk.pos.x, 0, lk.pos.y);
   g.rotation.y = Math.floor(Math.abs(lk.pos.x*13+lk.pos.y*7))%4 * Math.PI/2;
-  return g;
-}
-
-/* The Roamer: the thing that lives in the yard. Ragged, star-eyed, patient. */
-function makeRoamer(){
-  const g = new THREE.Group();
-  const rag  = new THREE.MeshLambertMaterial({color:0x3a3a42, emissive:0x121318});
-  const pale = new THREE.MeshLambertMaterial({color:0x8e8e9c, emissive:0x1c1c24});
-  const star = new THREE.MeshBasicMaterial({color:0xfff0b0});
-
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.62,10,9), pale);
-  head.position.y = 3.0; head.scale.set(1,1.12,0.9); g.add(head);
-  for(let sx=-1;sx<=1;sx+=2){                    // four-pointed star eyes
-    const e = new THREE.Group(); e.position.set(sx*0.24, 3.1, 0.52);
-    const a = new THREE.Mesh(new THREE.ConeGeometry(0.07,0.34,4), star); a.position.y=0.17; e.add(a);
-    const b2= new THREE.Mesh(new THREE.ConeGeometry(0.07,0.34,4), star); b2.position.y=-0.17; b2.rotation.z=Math.PI; e.add(b2);
-    const c = new THREE.Mesh(new THREE.ConeGeometry(0.06,0.26,4), star); c.position.x=0.13; c.rotation.z=-Math.PI/2; e.add(c);
-    const d2= new THREE.Mesh(new THREE.ConeGeometry(0.06,0.26,4), star); d2.position.x=-0.13; d2.rotation.z=Math.PI/2; e.add(d2);
-    g.add(e);
-  }
-  for(let i=0;i<7;i++){                          // spiked crown
-    const sp = new THREE.Mesh(new THREE.ConeGeometry(0.1,0.42,4), pale);
-    const a = i/7*Math.PI*2;
-    sp.position.set(Math.cos(a)*0.42, 3.6, Math.sin(a)*0.38);
-    sp.rotation.z = -Math.cos(a)*0.5; sp.rotation.x = Math.sin(a)*0.5; g.add(sp);
-  }
-  const cape = new THREE.Mesh(new THREE.ConeGeometry(1.35,2.9,9,1,true), rag);
-  cape.position.y = 1.5; g.add(cape);
-  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.8,1.9,8), rag);
-  torso.position.y = 1.7; g.add(torso);
-  const limbs = {};
-  for(let sx=-1;sx<=1;sx+=2){
-    const arm = new THREE.Object3D(); arm.position.set(sx*0.72,2.5,0);
-    const up = new THREE.Mesh(new THREE.BoxGeometry(0.17,1.1,0.17), rag); up.position.y=-0.55; arm.add(up);
-    const hand = new THREE.Mesh(new THREE.BoxGeometry(0.2,0.42,0.2), pale); hand.position.y=-1.3; arm.add(hand);
-    g.add(arm); limbs[sx<0?"armL":"armR"] = arm;
-    const leg = new THREE.Object3D(); leg.position.set(sx*0.26,1.0,0);
-    const sh = new THREE.Mesh(new THREE.BoxGeometry(0.22,1.0,0.22), rag); sh.position.y=-0.5; leg.add(sh);
-    g.add(leg); limbs[sx<0?"legL":"legR"] = leg;
-  }
-  // the hook, drawn beside him on the page
-  const hook = new THREE.Group();
-  const haft = new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.08,1.1,6),
-    new THREE.MeshLambertMaterial({color:0x2a2420, emissive:0x100d0b}));
-  haft.position.y = -0.55; hook.add(haft);
-  const blade = new THREE.MeshLambertMaterial({color:0xb6bac2, emissive:0x24262a});
-  for(let i=0;i<6;i++){                        // a curve of blade off the top
-    const seg = new THREE.Mesh(new THREE.BoxGeometry(0.1,0.3,0.07), blade);
-    const a = i/6*1.9;
-    seg.position.set(Math.sin(a)*0.72, 0.1 + (1-Math.cos(a))*0.62, 0);
-    seg.rotation.z = -a; hook.add(seg);
-  }
-  const tip = new THREE.Mesh(new THREE.ConeGeometry(0.1,0.34,4), blade);
-  tip.position.set(1.0, 0.74, 0); tip.rotation.z = -2.1; hook.add(tip);
-  hook.position.set(0.95, 1.2, 0.1); hook.rotation.z = 0.25;
-  g.add(hook);
-
-  const L = new THREE.PointLight(0xfff0b0, 1.5, 11, 1.8); L.position.y = 3.0; g.add(L);
-  g.userData = limbs;
-  g.visible = false;
   return g;
 }
 
@@ -1508,7 +1459,7 @@ function drawScare(ctx, kind, W, H){
     ctx.beginPath(); ctx.ellipse(gx,gy,gr*0.3,gr*0.3,0,0,7); ctx.fill();
   }
 
-  else if(kind==="ROAMER"){
+  else if(kind==="UNUSED_ROAMER"){
     ctx.fillStyle="#8e8e9c";
     ctx.beginPath(); ctx.ellipse(cx,cy,u*36,u*44,0,0,7); ctx.fill();
     ctx.fillStyle="#3a3a42";
@@ -2222,20 +2173,21 @@ function startXstruct(){
   if(!back) return;
   X.on = true; X.spawned = true; X.idx = S.cur - 1;
   X.gait = 0; X.stepT = 0; X.dist = 99; X.grace = 1.3;
-  X.x = back.exitPos.x - back.nd.x*4.5;       // a beat further back
-  X.z = back.exitPos.y - back.nd.y*4.5;
-  X.grace = 1.3;                               // it hauls itself upright first
+  // right in the doorway you just escaped through
+  X.x = back.exitPos.x - back.nd.x*1.4;
+  X.z = back.exitPos.y - back.nd.y*1.4;
+  X.grace = 1.4;                               // a beat to haul itself upright
   xstructMesh.position.set(X.x, 0, X.z);
   xstructMesh.visible = true;
   Snd.droneStart(); Snd.droneSet(0.2); Snd.thud(1.0);
   S.seen.XSTRUCT = true;
-  say("Something heavy just put itself down in the doorway behind you. Keep going.", 6000);
+  say("It is standing in the doorway you just came through. It found you again. GO.", 6000);
 }
 
 function stopXstruct(){
   const X = S.xs;
   if(!X.on) return;
-  X.on = false; X.done = true;
+  X.on = false; X.done = true;      // only ever called at the very end
   xstructMesh.visible = false;
   Snd.droneStop();
   UI.near.style.opacity = 0;
@@ -2414,17 +2366,17 @@ function startRoamer(){
   R.x = Math.max(b.x0+1.2, Math.min(b.x1-1.2, R.x));
   R.z = Math.max(b.z0+1.2, Math.min(b.z1-1.2, R.z));
   R.tx = R.x; R.tz = R.z;
-  roamer.position.set(R.x, 0, R.z);
-  roamer.visible = true;
+  xstructMesh.position.set(R.x, 0, R.z);
+  xstructMesh.visible = true;
   Snd.droneStart(); Snd.droneSet(0.12); Snd.thud(0.7);
-  say("Five keys are in these cabinets. Something else is down here with you.", 6000);
+  say("Five keys are in these cabinets. Something is already walking between them.", 6000);
 }
 
 function endRoamer(){
   const R = S.roam;
   if(!R.on) return;
   R.on = false;
-  roamer.visible = false;
+  xstructMesh.visible = false;
   Snd.droneStop();
   UI.near.style.opacity = 0;
 }
@@ -2438,7 +2390,7 @@ function updateRoamer(dt){
   R.dist = Math.hypot(dx, dz);
 
   // it can actually see: in front of it, close enough, and you not tucked away
-  const fx = Math.sin(roamer.rotation.y), fz = Math.cos(roamer.rotation.y);
+  const fx = Math.sin(xstructMesh.rotation.y), fz = Math.cos(xstructMesh.rotation.y);
   const facing = R.dist > 0.1 ? (dx/R.dist*fx + dz/R.dist*fz) : 1;
   const sees = !S.hidden && R.dist < 22 && facing > 0.34;
   if(sees){ R.seen = true; R.tx = S.pos.x; R.tz = S.pos.z; }
@@ -2474,16 +2426,17 @@ function updateRoamer(dt){
     const nx = R.x + ax/al*step, nz = R.z + az/al*step;
     if(freeSpotRoam(nx, R.z)) R.x = nx;
     if(freeSpotRoam(R.x, nz)) R.z = nz;
-    roamer.rotation.y = Math.atan2(ax/al, az/al);
+    xstructMesh.rotation.y = Math.atan2(ax/al, az/al);
     R.gait += dt*speed*1.5;
   }
-  roamer.position.set(R.x, Math.abs(Math.sin(R.gait))*0.07, R.z);
+  xstructMesh.position.set(R.x, Math.abs(Math.sin(R.gait))*0.07, R.z);
 
-  const L = roamer.userData, sw = Math.sin(R.gait);
+  const L = xstructMesh.userData, sw = Math.sin(R.gait);
   if(L.legL){
     L.legL.rotation.x =  sw*0.55; L.legR.rotation.x = -sw*0.55;
     L.armL.rotation.x = -sw*0.38; L.armR.rotation.x =  sw*0.38;
   }
+  if(L.gears) for(let i=0;i<L.gears.length;i++) L.gears[i].rotation.z += dt*(2.2+i);
 
   R.stepT -= dt;
   const near = Math.max(0, 1 - R.dist/24);
@@ -2494,7 +2447,7 @@ function updateRoamer(dt){
   // Contact costs you, but it is never a pin. After about a second it barges
   // past, loses you, and swings away, so a corner is survivable.
   if(!S.hidden && R.dist < 2.0){
-    damage(18*dt, "The Roamer had you in the open.", "ROAMER");
+    damage(18*dt, "Xstruct had you in the open.", "XSTRUCT");
     R.hit += dt;
     if(R.hit > 0.95){
       R.hit = 0; R.seen = false; R.think = 4.5;
@@ -2700,7 +2653,6 @@ function startRun(seed){
   vortexMesh = makeVortex(); world.add(vortexMesh);
   camoMesh = makeCamo(); world.add(camoMesh);
   scrapeMesh = makeScrape(); world.add(scrapeMesh);
-  roamer = makeRoamer(); world.add(roamer);
   xstructMesh = makeXstruct(); world.add(xstructMesh);
   darkMesh = makeDarkness(); world.add(darkMesh);
 
