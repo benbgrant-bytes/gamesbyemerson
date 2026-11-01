@@ -174,8 +174,8 @@
   <h1>HOLLOW<small>one hundred doors</small></h1>
   <p>A hotel that keeps generating itself ahead of you. Open doors, search the furniture for keys, and get inside a wardrobe when the lights start to go. Some things in here want to be looked at. Some very much do not.</p>
   <div class="keycaps">
-    <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move</span>
-    <span>mouse or <kbd>←</kbd><kbd>→</kbd> look</span>
+    <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> walk</span>
+    <span>mouse or <kbd>&larr;</kbd><kbd>&rarr;</kbd><kbd>&uarr;</kbd><kbd>&darr;</kbd> look</span>
     <span><kbd>Shift</kbd> run</span>
     <span><kbd>E</kbd> open, search, hide</span>
     <span><kbd>Esc</kbd> release the mouse</span>
@@ -1356,15 +1356,16 @@ function updatePlayer(dt){
   const TURN = 2.5;
   if(held.ArrowLeft)  S.yaw += TURN*dt;
   if(held.ArrowRight) S.yaw -= TURN*dt;
-  if(held.PageUp)   S.pitch = Math.min( 1.55, S.pitch + TURN*0.6*dt);
-  if(held.PageDown) S.pitch = Math.max(-1.55, S.pitch - TURN*0.6*dt);
+  // all four arrows look; the letter keys do the walking
+  if(held.ArrowUp   || held.PageUp)   S.pitch = Math.min( 1.55, S.pitch + TURN*0.6*dt);
+  if(held.ArrowDown || held.PageDown) S.pitch = Math.max(-1.55, S.pitch - TURN*0.6*dt);
 
   if(S.hidden){ S.vel.set(0,0,0); return; }
   const f = lookDir();
   const rx = -f.z, rz = f.x;
   let mx=0, mz=0;
-  if(held.KeyW||held.ArrowUp){    mx+=f.x;  mz+=f.z; }
-  if(held.KeyS||held.ArrowDown){  mx-=f.x;  mz-=f.z; }
+  if(held.KeyW){ mx+=f.x; mz+=f.z; }
+  if(held.KeyS){ mx-=f.x; mz-=f.z; }
   if(held.KeyD){ mx+=rx; mz+=rz; }
   if(held.KeyA){ mx-=rx; mz-=rz; }
   if(S.stick.on){

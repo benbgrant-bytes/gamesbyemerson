@@ -154,8 +154,8 @@
   <p>Everything worth having is underneath something. Cut your way down through ten caverns to whatever is waiting at the core, then climb back out before it takes the stairs with it.</p>
   <p style="margin-top:14px"><b style="color:#d9cdb4">The sword is quick. The axe is heavy.</b> Armoured things laugh at a blade. Fast things are gone before an axe lands. Switch often.</p>
   <div class="keycaps">
-    <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move</span>
-    <span>mouse or <kbd>&larr;</kbd><kbd>&rarr;</kbd> look</span>
+    <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> walk</span>
+    <span>mouse or <kbd>&larr;</kbd><kbd>&rarr;</kbd><kbd>&uarr;</kbd><kbd>&darr;</kbd> look</span>
     <span><kbd>Click</kbd> or <kbd>Space</kbd> strike</span>
     <span><kbd>Q</kbd> swap weapon</span>
     <span><kbd>Shift</kbd> run</span>
@@ -775,7 +775,7 @@ function flashHurt(){ UI.hurt.style.opacity=0.9; setTimeout(function(){ UI.hurt.
 
 /* ================================ input ================================ */
 const held={};
-const SWALLOW={ArrowUp:1,ArrowDown:1,ArrowLeft:1,ArrowRight:1,Space:1};
+const SWALLOW={ArrowUp:1,ArrowDown:1,ArrowLeft:1,ArrowRight:1,Space:1,PageUp:1,PageDown:1};
 function focusGame(){ try{ window.focus(); }catch(e){} try{ canvas.focus({preventScroll:true}); }catch(e){} }
 function onKeyDown(e){
   if(e.__seen) return; e.__seen=true;
@@ -1238,11 +1238,14 @@ function updatePlayer(dt){
   const TURN=2.5;
   if(held.ArrowLeft)  S.yaw += TURN*dt;
   if(held.ArrowRight) S.yaw -= TURN*dt;
+  // all four arrows look; the letter keys do the walking
+  if(held.ArrowUp   || held.PageUp)   S.pitch = Math.min( 1.55, S.pitch + TURN*0.6*dt);
+  if(held.ArrowDown || held.PageDown) S.pitch = Math.max(-1.55, S.pitch - TURN*0.6*dt);
 
   const f=lookDir(), rx=-f.z, rz=f.x;
   let mx=0, mz=0;
-  if(held.KeyW||held.ArrowUp){ mx+=f.x; mz+=f.z; }
-  if(held.KeyS||held.ArrowDown){ mx-=f.x; mz-=f.z; }
+  if(held.KeyW){ mx+=f.x; mz+=f.z; }
+  if(held.KeyS){ mx-=f.x; mz-=f.z; }
   if(held.KeyD){ mx+=rx; mz+=rz; }
   if(held.KeyA){ mx-=rx; mz-=rz; }
   if(S.stick.on){ mx+=f.x*S.stick.y+rx*S.stick.x; mz+=f.z*S.stick.y+rz*S.stick.x; }
