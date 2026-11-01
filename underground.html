@@ -178,7 +178,7 @@
 <div class="screen" id="title">
   <h1>THE UNDERGROUND<small>hollow &middot; part three</small></h1>
   <p>The stair from the courtyard goes down a long way. A hundred cut chambers under the rock, doors 201 to 300, and no daylight in any of them. Same rules: open the door, search what is down here, and get into a cut-out in the wall when the lamps start to go.</p>
-  <p style="margin-top:14px"><b style="color:#d9cdb4">Darkness</b> takes the lights out of a whole chamber, so learn the shape of a room while you still can. At door 289 something is pacing between the cabinets. And at door 291, something else finds you, and it does not stop.</p>
+  <p style="margin-top:14px"><b style="color:#d9cdb4">Darkness</b> takes the lights out of a whole chamber, so learn the shape of a room while you still can. At door 289 something is pacing between the cabinets. Get the five keys and get out. It will not forget you, and at door 291 it is waiting in the doorway behind you.</p>
   <div class="keycaps">
     <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> walk</span>
     <span>mouse or <kbd>&larr;</kbd><kbd>&rarr;</kbd><kbd>&uarr;</kbd><kbd>&darr;</kbd> look</span>
@@ -217,7 +217,7 @@
 /* ================================ config ================================ */
 const CFG = {
   H:5.0, DW:2.0, DH:3.2, T:0.25,
-  TOTAL:100, EYE:1.62, AJAR:0.46, TRAP_HOLD:1.5,
+  TOTAL:100, EYE:1.62, AJAR:0.46, SCRAPE_HOLD:1.5,
   WALK:4.3, RUN:7.2, ACC:14, SENS:0.0022,
   // doors carry on from the courtyard: room 0 is door 1, plaque 201
   PLAQUE:201,
@@ -545,7 +545,8 @@ function generate(seed){
       i:i, p:p.clone(), d:d.clone(), perp:perp, along:along, across:across,
       center:center, box:box,
       exitPos:best.ep, nd:best.nd, exitT:best.t,
-      locked:(i>3 && i<CFG.TOTAL-1 && rng()<0.20),
+      // never lock a Darkness chamber: you cannot hunt for a key in a blackout
+      locked:(i>3 && i<CFG.TOTAL-1 && !darkRooms[i] && rng()<0.20),
       closets:[], furniture:[], events:[],
       opened:false, eventFired:false, group:null, doorPivot:null, doorAngle:0,
       pal:0, wastes:[], lockers:[], yard:(i === CFG.WARDEN_ROOM),
@@ -627,7 +628,7 @@ function generate(seed){
       room.lockers = spots;
     } else {
       // thorn wastes: a chance of one or two patches, never across the only line of travel
-      const nV = rng()<0.13 ? 1 : 0;        // rare, unlike the courtyard vines
+      const nV = (room.dark ? 0 : (rng()<0.13 ? 1 : 0));   // rare, and never in the dark
       for(let k=0;k<nV;k++){
         const u = (rng()-0.3)*(along*0.55), v = (rng()-0.5)*(across*0.55);
         const pos = center.clone().addScaledVector(d, u).addScaledVector(perp, v);
@@ -2070,7 +2071,7 @@ function updateEvents(dt){
         scrapeMesh.visible = true;
         Snd.hiss();
         if(!S.seen.SCRAPE){ S.seen.SCRAPE=true;
-          say("Trap is right behind you. Turn and face it, fast.", 4200); }
+          say("Scrape is right behind you. Turn and face it, fast.", 4200); }
       }
     } else if(ev.phase==="show"){
       scrapeMesh.lookAt(S.pos.x, S.pos.y+CFG.EYE, S.pos.z);
@@ -2093,10 +2094,10 @@ function updateEvents(dt){
     } else if(ev.phase==="linger"){
       scrapeMesh.lookAt(S.pos.x, S.pos.y+CFG.EYE, S.pos.z);
       // a slow sink over the last third, so he leaves rather than blinking out
-      const k = Math.max(0, (ev.t - CFG.TRAP_HOLD*0.66) / (CFG.TRAP_HOLD*0.34));
+      const k = Math.max(0, (ev.t - CFG.SCRAPE_HOLD*0.66) / (CFG.SCRAPE_HOLD*0.34));
       scrapeMesh.position.y = 1.85 - k*0.9;
       scrapeMesh.scale.setScalar(Math.max(0.05, 1 - k*0.85));
-      if(ev.t > CFG.TRAP_HOLD){
+      if(ev.t > CFG.SCRAPE_HOLD){
         scrapeMesh.visible = false;
         scrapeMesh.position.y = 1.85;
         scrapeMesh.scale.setScalar(1);
