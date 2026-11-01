@@ -89,14 +89,14 @@
   #knob{position:absolute;left:50%;top:50%;width:56px;height:56px;border-radius:50%;
     margin:-28px 0 0 -28px;background:rgba(232,192,122,.5);
     border:1px solid rgba(232,192,122,.75)}
-  #btnAct{position:absolute;right:26px;bottom:34px;width:104px;height:104px;border-radius:50%;
+  #btnAct{position:absolute;right:26px;bottom:calc(34px + env(safe-area-inset-bottom,0px));width:104px;height:104px;border-radius:50%;
     pointer-events:auto;margin:0;padding:8px;font-family:'Barlow Condensed',sans-serif;
     font-size:15px;font-weight:600;line-height:1.15;letter-spacing:.04em;text-transform:uppercase;
     color:#0a0806;background:rgba(232,192,122,.9);border:0;
     display:flex;align-items:center;justify-content:center;text-align:center}
   #btnAct.idle{background:rgba(120,110,92,.28);color:rgba(217,205,180,.45)}
   #btnAct:active{background:#fff}
-  #btnRun{position:absolute;right:150px;bottom:52px;width:76px;height:76px;border-radius:50%;
+  #btnRun{position:absolute;right:150px;bottom:calc(52px + env(safe-area-inset-bottom,0px));width:76px;height:76px;border-radius:50%;
     pointer-events:auto;margin:0;padding:0;font-family:'Barlow Condensed',sans-serif;
     font-size:14px;font-weight:600;letter-spacing:.14em;
     color:rgba(217,205,180,.75);background:rgba(10,8,5,.42);
@@ -114,6 +114,26 @@
     #sub{bottom:22%;font-size:16px;width:86vw}
     .screen p{font-size:16px}
     .screen h1 small{font-size:13px;letter-spacing:.3em}
+  }
+
+  /* ---------------- jumpscares ---------------- */
+  #scare{display:none;position:fixed;inset:0;z-index:25;background:#000;overflow:hidden}
+  #scare canvas{display:block;width:100%;height:100%}
+  #scare.go{animation:scarein .95s cubic-bezier(.2,.9,.3,1) forwards}
+  @keyframes scarein{
+    0%{opacity:0;transform:scale(.46) translate(0,0)}
+    7%{opacity:1;transform:scale(1.06) translate(-9px,7px)}
+    15%{transform:scale(1.01) translate(8px,-6px)}
+    23%{transform:scale(1.09) translate(-7px,-8px)}
+    31%{transform:scale(1.03) translate(6px,7px)}
+    42%{transform:scale(1.12) translate(-8px,5px)}
+    56%{transform:scale(1.05) translate(7px,-7px)}
+    70%{transform:scale(1.14) translate(-5px,6px)}
+    85%{transform:scale(1.08) translate(6px,4px)}
+    100%{opacity:1;transform:scale(1.2) translate(0,0)}
+  }
+  @media (prefers-reduced-motion: reduce){
+    #scare.go{animation:none;opacity:1}
   }
 
   #crash{display:none;position:fixed;left:0;right:0;bottom:0;z-index:40;padding:12px 18px;
@@ -147,6 +167,8 @@
   <button id="btnRun" type="button">RUN</button>
   <button id="btnAct" type="button"><span>&middot;</span></button>
 </div>
+
+<div id="scare"><canvas id="scarecv"></canvas></div>
 
 <div class="screen" id="title">
   <h1>HOLLOW<small>one hundred doors</small></h1>
@@ -189,7 +211,7 @@
 /* ================================ config ================================ */
 const CFG = {
   H:5.0, DW:2.0, DH:3.2, T:0.25,
-  TOTAL:100, EYE:1.62,
+  TOTAL:100, EYE:1.62, AJAR:0.46,
   WALK:4.3, RUN:7.2, ACC:14, SENS:0.0022,
   CHASE_FROM:45, CHASE_TO:55,
   CHASE_SPEED:4.85,      // between a walk and a sprint: outrunnable in bursts
@@ -531,7 +553,7 @@ function generate(seed){
   const r2 = mulberry32(seed ^ 0x9e3779b9);
   for(let i=4;i<CFG.TOTAL-1;i++){
     const roll = r2();
-    if(i>=25 && roll < 0.09)  rooms[i].events.push("RECOIL");
+    if(i>=25 && roll < 0.09)  rooms[i].events.push("SWIPE");
     else if(roll < 0.20)      rooms[i].events.push("SURGE");
     else if(roll < 0.32)      rooms[i].events.push("GAZE");
     else if(roll < 0.44)      rooms[i].events.push("WHISPER");
@@ -703,7 +725,7 @@ function doorwayBox(room){
 }
 
 /* ================================ entities ================================ */
-let surge=null, gazeMesh=null, whisperMesh=null, chaser=null;
+let surge=null, swipeMesh=null, gazeMesh=null, whisperMesh=null, chaser=null;
 
 function makeSurge(){
   const g = new THREE.Group();
@@ -721,6 +743,64 @@ function makeSurge(){
   g.visible = false;
   return g;
 }
+/* Swipe, drawn by Emerson: a shield-shaped head, four-pointed star eyes,
+   three horns, and chips of green light coming off it. */
+function makeSwipe(){
+  const g = new THREE.Group();
+  const shell = new THREE.MeshLambertMaterial({color:0x14301c, emissive:0x0a2412});
+  const lime  = new THREE.MeshBasicMaterial({color:0x6bff8a});
+  const limeD = new THREE.MeshBasicMaterial({color:0x2fbf55});
+
+  // shield head: a pentagon slab facing you
+  const head = new THREE.Mesh(new THREE.CylinderGeometry(1.15,1.15,0.5,5), shell);
+  head.rotation.x = Math.PI/2; head.position.y = 3.3; g.add(head);
+
+  // two four-pointed stars for eyes, each a pair of crossed spikes
+  for(let sx=-1; sx<=1; sx+=2){
+    const eye = new THREE.Group();
+    eye.position.set(sx*0.44, 3.55, 0.3);
+    for(let k=0;k<2;k++){
+      const v = new THREE.Mesh(new THREE.ConeGeometry(0.1,0.46,4), lime);
+      v.position.y = 0.23; eye.add(v);
+      const v2 = new THREE.Mesh(new THREE.ConeGeometry(0.1,0.46,4), lime);
+      v2.position.y = -0.23; v2.rotation.z = Math.PI; eye.add(v2);
+      const h1 = new THREE.Mesh(new THREE.ConeGeometry(0.09,0.38,4), lime);
+      h1.position.x = 0.19; h1.rotation.z = -Math.PI/2; eye.add(h1);
+      const h2 = new THREE.Mesh(new THREE.ConeGeometry(0.09,0.38,4), lime);
+      h2.position.x = -0.19; h2.rotation.z = Math.PI/2; eye.add(h2);
+    }
+    g.add(eye);
+  }
+
+  // three horns, two up top and one off the right cheek
+  const horns = [[-0.72,4.25,0.35],[0.72,4.25,-0.35],[1.08,3.55,-0.5]];
+  for(let i=0;i<horns.length;i++){
+    const h = new THREE.Mesh(new THREE.ConeGeometry(0.22,0.95,4), shell);
+    h.position.set(horns[i][0], horns[i][1], 0);
+    h.rotation.z = horns[i][2];
+    g.add(h);
+  }
+
+  // cloak falling away underneath
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.6,1.85,3.1,7), shell);
+  body.position.y = 1.5; g.add(body);
+  const trail = new THREE.Mesh(new THREE.ConeGeometry(1.4,4.2,7,1,true), shell);
+  trail.rotation.x = -Math.PI/2; trail.position.set(0,1.9,-2.1); g.add(trail);
+
+  // chips of light shaken loose around it
+  const chips = [];
+  for(let i=0;i<9;i++){
+    const c = new THREE.Mesh(new THREE.OctahedronGeometry(0.13+Math.random()*0.12),
+                             i%2 ? lime : limeD);
+    c.position.set((Math.random()-0.5)*3.4, 1.6+Math.random()*2.8, (Math.random()-0.5)*1.6);
+    g.add(c); chips.push(c);
+  }
+  const L = new THREE.PointLight(0x55ff77, 3.0, 16, 1.5); L.position.y = 3.0; g.add(L);
+  g.userData = {chips:chips};
+  g.visible = false;
+  return g;
+}
+
 function makeChaser(){
   // The Porter: a hotel bellhop stretched a foot and a half too tall.
   const g = new THREE.Group();
@@ -813,6 +893,139 @@ function makeWhisper(){
   return g;
 }
 
+/* ================================ jumpscares ================================ */
+/* Each face is drawn to fill the screen. No images: same rule as the rest of
+   the game, everything is generated. */
+function drawScare(ctx, kind, W, H){
+  const cx = W/2, cy = H*0.52, u = Math.min(W,H)/100;   // u = 1% of the short side
+  ctx.fillStyle = "#000"; ctx.fillRect(0,0,W,H);
+
+  if(kind==="SURGE"){
+    ctx.fillStyle="#0a0d14";
+    ctx.beginPath(); ctx.ellipse(cx,cy,u*46,u*54,0,0,7); ctx.fill();
+    ctx.fillStyle="#dfe8ff";
+    for(const sx of [-1,1]){
+      ctx.beginPath(); ctx.ellipse(cx+sx*u*17,cy-u*8,u*7,u*10,0,0,7); ctx.fill();
+    }
+    ctx.fillStyle="#000";
+    for(const sx of [-1,1]){
+      ctx.beginPath(); ctx.ellipse(cx+sx*u*17,cy-u*6,u*3,u*5,0,0,7); ctx.fill();
+    }
+    ctx.fillStyle="#05070c";
+    ctx.beginPath(); ctx.moveTo(cx-u*16,cy+u*16); ctx.lineTo(cx+u*16,cy+u*16);
+    ctx.lineTo(cx,cy+u*48); ctx.closePath(); ctx.fill();
+  }
+
+  else if(kind==="SWIPE"){
+    // pentagon shield head
+    ctx.fillStyle="#14301c"; ctx.strokeStyle="#55ff77"; ctx.lineWidth=u*0.9;
+    ctx.beginPath();
+    for(let i=0;i<5;i++){
+      const a=-Math.PI/2 + i*2*Math.PI/5;
+      const x=cx+Math.cos(a)*u*48, y=cy+Math.sin(a)*u*52;
+      i ? ctx.lineTo(x,y) : ctx.moveTo(x,y);
+    }
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    // three horns
+    ctx.fillStyle="#0d2214";
+    const horns=[[-30,-34,-40,-74,-14,-50],[30,-34,42,-72,14,-50],[46,-4,76,-16,40,14]];
+    for(const hn of horns){
+      ctx.beginPath(); ctx.moveTo(cx+hn[0]*u,cy+hn[1]*u);
+      ctx.lineTo(cx+hn[2]*u,cy+hn[3]*u); ctx.lineTo(cx+hn[4]*u,cy+hn[5]*u);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+    // four-pointed star eyes
+    ctx.shadowColor="#55ff77"; ctx.shadowBlur=u*7; ctx.fillStyle="#9bffb0";
+    for(const sx of [-1,1]){
+      const ex=cx+sx*u*18, ey=cy-u*8;
+      ctx.beginPath();
+      ctx.moveTo(ex,ey-u*17); ctx.quadraticCurveTo(ex+u*3,ey-u*3,ex+u*15,ey);
+      ctx.quadraticCurveTo(ex+u*3,ey+u*3,ex,ey+u*17);
+      ctx.quadraticCurveTo(ex-u*3,ey+u*3,ex-u*15,ey);
+      ctx.quadraticCurveTo(ex-u*3,ey-u*3,ex,ey-u*17);
+      ctx.closePath(); ctx.fill();
+    }
+    // loose chips of light
+    for(let i=0;i<14;i++){
+      const a=i*1.17, r=u*(56+((i*13)%26));
+      const x=cx+Math.cos(a)*r, y=cy+Math.sin(a)*r*0.9, q=u*(1.6+(i%3));
+      ctx.beginPath(); ctx.moveTo(x,y-q); ctx.lineTo(x+q,y); ctx.lineTo(x,y+q); ctx.lineTo(x-q,y);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.shadowBlur=0;
+  }
+
+  else if(kind==="PORTER"){
+    ctx.fillStyle="#5d1a1d";                      // cap
+    ctx.fillRect(cx-u*34, cy-u*62, u*68, u*22);
+    ctx.fillStyle="#14100c";
+    ctx.fillRect(cx-u*42, cy-u*42, u*84, u*7);
+    ctx.fillStyle="#b9ac93";                      // face
+    ctx.beginPath(); ctx.ellipse(cx,cy-u*2,u*31,u*42,0,0,7); ctx.fill();
+    ctx.shadowColor="#ffc34d"; ctx.shadowBlur=u*9; ctx.fillStyle="#ffc34d";
+    for(const sx of [-1,1]){
+      ctx.beginPath(); ctx.ellipse(cx+sx*u*13,cy-u*12,u*5.5,u*5.5,0,0,7); ctx.fill();
+    }
+    ctx.shadowBlur=0;
+    ctx.fillStyle="#140f0b";                      // jaw hanging open
+    ctx.beginPath(); ctx.ellipse(cx,cy+u*24,u*12,u*20,0,0,7); ctx.fill();
+    ctx.fillStyle="#bb9440";                      // collar
+    ctx.fillRect(cx-u*30, cy+u*44, u*60, u*8);
+  }
+
+  else if(kind==="GAZE"){
+    ctx.fillStyle="#d8d2c4";
+    ctx.beginPath(); ctx.ellipse(cx,cy,u*54,u*40,0,0,7); ctx.fill();
+    ctx.fillStyle="#c08a3a";
+    for(let i=0;i<40;i++){
+      const a=i*0.157;
+      ctx.beginPath(); ctx.moveTo(cx,cy);
+      ctx.lineTo(cx+Math.cos(a)*u*52, cy+Math.sin(a)*u*38);
+      ctx.lineTo(cx+Math.cos(a+0.05)*u*52, cy+Math.sin(a+0.05)*u*38);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.shadowColor="#ffb020"; ctx.shadowBlur=u*12; ctx.fillStyle="#ffb020";
+    ctx.beginPath(); ctx.ellipse(cx,cy,u*26,u*26,0,0,7); ctx.fill();
+    ctx.shadowBlur=0; ctx.fillStyle="#04060b";
+    ctx.beginPath(); ctx.ellipse(cx,cy,u*12,u*12,0,0,7); ctx.fill();
+  }
+
+  else {   // WHISPER
+    ctx.fillStyle="#d8d2c4";
+    ctx.beginPath(); ctx.ellipse(cx,cy,u*33,u*48,0,0,7); ctx.fill();
+    ctx.fillStyle="#04060b";
+    for(const sx of [-1,1]){
+      ctx.beginPath(); ctx.ellipse(cx+sx*u*13,cy-u*10,u*7,u*11,0,0,7); ctx.fill();
+    }
+    ctx.fillStyle="#04060b";
+    ctx.beginPath(); ctx.ellipse(cx,cy+u*24,u*9,u*17,0,0,7); ctx.fill();
+  }
+}
+
+let scareTimer = null;
+function jumpscare(kind, ms, done){
+  const el = UI.scare, cv = UI.scarecv;
+  if(!el || !cv){ if(done) done(); return; }
+  const W = Math.min(innerWidth, 1400), H = Math.min(innerHeight, 1000);
+  cv.width = W; cv.height = H;
+  drawScare(cv.getContext("2d"), kind, W, H);
+  el.style.display = "block";
+  el.classList.remove("go");
+  void el.offsetWidth;                 // restart the animation
+  el.classList.add("go");
+  Snd.scream(); Snd.thud(0.9);
+  clearTimeout(scareTimer);
+  scareTimer = setTimeout(function(){
+    el.classList.remove("go");
+    el.style.display = "none";
+    if(done) done();
+  }, ms || 1150);
+}
+function hideScare(){
+  clearTimeout(scareTimer);
+  if(UI.scare){ UI.scare.classList.remove("go"); UI.scare.style.display="none"; }
+}
+
 /* ================================ state ================================ */
 const S = {
   running:false, dead:false, won:false,
@@ -823,8 +1036,9 @@ const S = {
   t:0, bob:0, flicker:1, locked:false, gotKey:false,
   touch:false, touchRun:false, stick:{on:false, x:0, y:0},
   ev:{kind:null, phase:"", t:0, room:-1, pass:0, path:null, dist:0, total:0},
+  killer:null,
   chase:{on:false, idx:0, x:0, z:0, gait:0, stepT:0, dist:99, grace:0, ended:false},
-  seen:{SURGE:false,RECOIL:false,GAZE:false,WHISPER:false,LOCK:false}
+  seen:{SURGE:false,SWIPE:false,GAZE:false,WHISPER:false,LOCK:false}
 };
 function clearEvent(){ S.ev = {kind:null,phase:"",t:0,room:-1,pass:0,path:null,dist:0,total:0}; }
 
@@ -1001,7 +1215,15 @@ function bindTouchButtons(){
 bindTouchButtons();
 
 // coarse pointers get the controls before they touch anything
-if(window.matchMedia && window.matchMedia("(pointer: coarse)").matches){
+function hasTouchScreen(){
+  // any touchscreen at all, not just "is the main pointer a finger":
+  // an iPad in a keyboard/trackpad case reports a fine primary pointer
+  if((navigator.maxTouchPoints||0) > 0) return true;
+  if("ontouchstart" in window) return true;
+  try{ if(window.matchMedia("(any-pointer: coarse)").matches) return true; }catch(e){}
+  return false;
+}
+if(hasTouchScreen()){
   enableTouch();
   const how = document.getElementById("touchhow");
   if(how) how.style.display = "block";
@@ -1030,6 +1252,8 @@ const UI = {
   stare:document.getElementById("stare"),
   near:document.getElementById("near"),
   act:document.getElementById("btnAct"),
+  scare:document.getElementById("scare"),
+  scarecv:document.getElementById("scarecv"),
   title:document.getElementById("title"),
   dead:document.getElementById("dead"),
   won:document.getElementById("won")
@@ -1185,12 +1409,12 @@ function fireEvents(r){
   const kind = r.events[0];
   S.ev = {kind:kind, phase:"warn", t:0, room:r.i, pass:0, path:null, dist:0, total:0};
 
-  if(kind==="SURGE" || kind==="RECOIL"){
+  if(kind==="SURGE" || kind==="SWIPE"){
     Snd.startRumble();
     if(kind==="SURGE" && !S.seen.SURGE){ S.seen.SURGE=true;
       say("The lights are going. Get inside a wardrobe and stay there.", 5200); }
-    if(kind==="RECOIL" && !S.seen.RECOIL){ S.seen.RECOIL=true;
-      say("This one comes back. Do not step out after the first pass.", 5600); }
+    if(kind==="SWIPE" && !S.seen.SWIPE){ S.seen.SWIPE=true;
+      say("Green light on the wallpaper. Swipe comes back four times. Do not step out early.", 6000); }
   }
   else if(kind==="GAZE"){
     S.ev.phase = "active";
@@ -1209,7 +1433,7 @@ function updateEvents(dt){
   if(!ev.kind) return;
   ev.t += dt;
 
-  if(ev.kind==="SURGE" || ev.kind==="RECOIL"){
+  if(ev.kind==="SURGE" || ev.kind==="SWIPE"){
     if(ev.phase==="warn"){
       S.flicker = 0.25 + Math.random()*0.85;
       if(ev.t > CFG.WARN){ ev.phase="run"; ev.t=0; Snd.stopRumble(); startPass(ev, 1); }
@@ -1220,7 +1444,7 @@ function updateEvents(dt){
       S.flicker = 0.18 + Math.random()*0.5;
       if(ev.t > 1.25){ ev.phase="run"; ev.t=0; startPass(ev, (ev.pass%2) ? -1 : 1); }
     } else if(ev.phase==="done"){
-      if(ev.t > 1.6){ surge.visible=false; clearEvent(); }
+      if(ev.t > 1.6){ surge.visible=false; swipeMesh.visible=false; clearEvent(); }
     }
   }
 
@@ -1235,7 +1459,7 @@ function updateEvents(dt){
       let tz = gazeMesh.position.z - S.pos.z;
       const tl = Math.hypot(tx,ty,tz) || 1;
       const dot = (dirx*tx + diry*ty + dirz*tz)/tl;
-      if(dot > 0.86){ staring = true; damage(26*dt, "You looked at it too long."); }
+      if(dot > 0.86){ staring = true; damage(26*dt, "You looked at it too long.", "GAZE"); }
     }
     UI.stare.style.opacity = staring ? 0.85 : 0;
     if(S.cur > ev.room){ gazeMesh.visible=false; UI.stare.style.opacity=0; clearEvent(); }
@@ -1260,8 +1484,10 @@ function updateEvents(dt){
       const dot = (dx*dir.x + dz*dir.z)/dl;
       if(dot > 0.9 || S.hidden){ whisperMesh.visible=false; Snd.hiss(); clearEvent(); }
       else if(ev.t > 3.6){
-        whisperMesh.visible=false; Snd.scream();
-        damage(28, "It got tired of waiting.");
+        whisperMesh.visible=false;
+        damage(28, "It got tired of waiting.", "WHISPER");
+        // the whisperer does not kill you, it just gets in your face
+        if(!S.dead) jumpscare("WHISPER", 950);
         clearEvent();
       }
     }
@@ -1364,16 +1590,18 @@ function updateChase(dt){
   // a wardrobe does not work on something that watched you climb into it
   if(S.hidden && C.dist < 4.0){
     leaveCloset();
-    damage(16, "It opened the wardrobe.");
+    damage(16, "It opened the wardrobe.", "PORTER");
     say("It knows where you went. Wardrobes are its job.", 3400);
   }
 
   // contact
   if(C.idx === S.cur && !S.hidden){
     const straight = Math.hypot(C.x-S.pos.x, C.z-S.pos.z);
-    if(straight < 1.9) damage(23*dt, "The Porter caught up with you.");
+    if(straight < 1.9) damage(23*dt, "The Porter caught up with you.", "PORTER");
   }
 }
+
+function runnerMesh(){ return (S.ev.kind==="SWIPE") ? swipeMesh : surge; }
 
 function startPass(ev, sign){
   const a = Math.max(0, ev.room-2), b = Math.min(CFG.TOTAL-1, ev.room+3);
@@ -1386,15 +1614,16 @@ function startPass(ev, sign){
   let total = 0;
   for(let i=1;i<pts.length;i++) total += pts[i].distanceTo(pts[i-1]);
   ev.path = pts; ev.total = total; ev.dist = 0; ev.pass++;
-  surge.visible = true;
+  runnerMesh().visible = true;
   Snd.thud(0.85);
 }
 
 function moveSurge(dt, ev){
   ev.dist += 26*dt;
+  const RM = runnerMesh();
   if(ev.dist >= ev.total){
-    surge.visible = false;
-    const maxPass = (ev.kind==="RECOIL") ? 4 : 1;
+    RM.visible = false;
+    const maxPass = (ev.kind==="SWIPE") ? 4 : 1;
     if(ev.pass < maxPass){ ev.phase="between"; ev.t=0; }
     else {
       ev.phase="done"; ev.t=0; Snd.thud(0.45);
@@ -1416,28 +1645,42 @@ function moveSurge(dt, ev){
     }
     rem -= seg; px = pts[i].x; pz = pts[i].z;
   }
-  surge.position.set(px, 0, pz);
-  surge.rotation.y = Math.atan2(hx, hz);
-  if(!S.hidden && Math.hypot(px-S.pos.x, pz-S.pos.z) < 4.2) die("It went straight through you.");
+  RM.position.set(px, 0, pz);
+  RM.rotation.y = Math.atan2(hx, hz);
+  if(RM.userData && RM.userData.chips){
+    for(let i=0;i<RM.userData.chips.length;i++){
+      const c = RM.userData.chips[i];
+      c.rotation.x += dt*(2+i*0.3); c.rotation.y += dt*(1.5+i*0.2);
+    }
+  }
+  if(!S.hidden && Math.hypot(px-S.pos.x, pz-S.pos.z) < 4.2)
+    die(S.ev.kind==="SWIPE" ? "Swipe went straight through you."
+                              : "It went straight through you.", S.ev.kind);
 }
 
 /* ================================ damage ================================ */
-function damage(amt, reason){
+function damage(amt, reason, by){
   if(S.dead) return;
+  if(by) S.killer = by;
   S.hp -= amt; S.lastHurt = S.t;
   if(amt > 5) flashHurt();
-  if(S.hp <= 0){ S.hp = 0; die(reason); }
+  if(S.hp <= 0){ S.hp = 0; die(reason, by); }
 }
-function die(reason){
+function die(reason, by){
   if(S.dead) return;
   S.dead = true; S.running = false;
-  Snd.stopRumble(); Snd.droneStop(); Snd.scream();
+  Snd.stopRumble(); Snd.droneStop();
   S.chase.on = false;
   UI.near.style.opacity = 0;
   unlockPointer(); updateLookHint();
   UI.dead.querySelector(".cause").textContent = reason;
   UI.dead.querySelector(".stat").textContent = "Reached door " + S.cur + " of 100.";
-  UI.dead.classList.remove("hide");
+
+  // whatever killed you gets the last word before the screen comes up
+  const kind = by || S.killer || null;
+  S.killer = kind;
+  if(kind) jumpscare(kind, 1250, function(){ UI.dead.classList.remove("hide"); });
+  else { Snd.scream(); UI.dead.classList.remove("hide"); }
 }
 function win(){
   S.won = true; S.running = false;
@@ -1484,7 +1727,7 @@ function frame(now){
 
   if(S.t - S.lastHurt > 11 && S.hp > 0 && S.hp < 100) S.hp = Math.min(100, S.hp + 3.2*dt);
 
-  const surging = S.ev.kind==="SURGE" || S.ev.kind==="RECOIL";
+  const surging = S.ev.kind==="SURGE" || S.ev.kind==="SWIPE";
   if(!surging || S.ev.phase==="done") S.flicker += (1 - S.flicker)*Math.min(1, dt*3);
 
   // animate doors and wardrobes near the player
@@ -1498,7 +1741,7 @@ function frame(now){
     for(let k=0;k<r.closets.length;k++){
       const cl = r.closets[k];
       if(!cl.pivot) continue;
-      const ct = cl.open ? 1.7 : 0;
+      const ct = cl.open ? ((S.hidden===cl) ? CFG.AJAR : 1.7) : 0;
       cl.angle += (ct - cl.angle)*Math.min(1, dt*7);
       cl.pivot.rotation.y = -cl.angle;
     }
@@ -1567,6 +1810,7 @@ function startRun(seed){
   if(world){ scene.remove(world); disposeWorld(world); }
   world = new THREE.Group(); scene.add(world);
   surge = makeSurge(); world.add(surge);
+  swipeMesh = makeSwipe(); world.add(swipeMesh);
   gazeMesh = makeGaze(); world.add(gazeMesh);
   whisperMesh = makeWhisper(); world.add(whisperMesh);
   chaser = makeChaser(); world.add(chaser);
@@ -1574,7 +1818,8 @@ function startRun(seed){
   generate(seed);
   S.cur=0; S.hp=100; S.sta=100; S.keys=0;
   S.dead=false; S.won=false; S.hidden=null;
-  S.flicker=1; S.bob=0; S.t=0; S.lastHurt=-99;
+  S.flicker=1; S.bob=0; S.t=0; S.lastHurt=-99; S.killer=null;
+  hideScare();
   S.yaw=0; S.pitch=0; S.vel.set(0,0,0);
   clearEvent();
   Snd.droneStop();

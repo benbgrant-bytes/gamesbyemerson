@@ -71,15 +71,15 @@
   #touch button{position:absolute;pointer-events:auto;margin:0;border:0;border-radius:50%;
     font-family:'Barlow Condensed',sans-serif;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
     display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.1}
-  #btnAtk{right:24px;bottom:30px;width:112px;height:112px;font-size:17px;color:#0a0806;
+  #btnAtk{right:24px;bottom:calc(30px + env(safe-area-inset-bottom,0px));width:112px;height:112px;font-size:17px;color:#0a0806;
     background:rgba(200,74,44,.92)}
   #btnAtk:active{background:#ff8a5a}
-  #btnSwap{right:152px;bottom:40px;width:78px;height:78px;font-size:13px;padding:6px;
+  #btnSwap{right:152px;bottom:calc(40px + env(safe-area-inset-bottom,0px));width:78px;height:78px;font-size:13px;padding:6px;
     color:rgba(217,205,180,.8);background:rgba(10,8,5,.45);border:1px solid rgba(217,205,180,.3)}
-  #btnRun{right:30px;bottom:156px;width:74px;height:74px;font-size:13px;
+  #btnRun{right:30px;bottom:calc(156px + env(safe-area-inset-bottom,0px));width:74px;height:74px;font-size:13px;
     color:rgba(217,205,180,.75);background:rgba(10,8,5,.42);border:1px solid rgba(217,205,180,.28)}
   #btnRun.on{background:rgba(109,115,85,.75);color:#0a0806}
-  #btnAct{left:50%;bottom:30px;transform:translateX(-50%);width:96px;height:96px;font-size:14px;
+  #btnAct{left:50%;bottom:calc(30px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);width:96px;height:96px;font-size:14px;
     padding:8px;color:#0a0806;background:rgba(232,192,122,.9);display:none}
   #btnAct.show{display:flex}
 
@@ -905,7 +905,15 @@ function bindButtons(){
   });
 }
 bindButtons();
-if(window.matchMedia && window.matchMedia("(pointer: coarse)").matches){
+function hasTouchScreen(){
+  // any touchscreen at all, not just "is the main pointer a finger":
+  // an iPad in a keyboard/trackpad case reports a fine primary pointer
+  if((navigator.maxTouchPoints||0) > 0) return true;
+  if("ontouchstart" in window) return true;
+  try{ if(window.matchMedia("(any-pointer: coarse)").matches) return true; }catch(e){}
+  return false;
+}
+if(hasTouchScreen()){
   enableTouch();
   const how=document.getElementById("touchhow"); if(how) how.style.display="block";
 }

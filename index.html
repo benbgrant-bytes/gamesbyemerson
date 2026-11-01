@@ -44,6 +44,7 @@
   }
   .row .num{font-variant-numeric:tabular-nums; width:26px; flex:0 0 auto}
   .row .name{white-space:nowrap; text-transform:uppercase}
+  @media (max-width:560px){ .row .name{white-space:normal; font-size:17px} .row .dots{display:none} }
   .row .dots{flex:1; border-bottom:1px dotted var(--line); transform:translateY(-5px)}
   .row .state{flex:0 0 auto; font-size:14px; letter-spacing:.2em}
 
@@ -81,17 +82,17 @@
 
   <ul class="menu" id="menu">
     <li><a class="row open sel" href="hollow.html">
-      <span class="num">01</span><span class="name">Hollow</span>
+      <span class="num">01</span><span class="name">Hollow &middot; Part 1 &mdash; The Hotel</span>
       <span class="dots"></span><span class="state">Play</span></a></li>
+    <li><a class="row open" href="courtyard.html">
+      <span class="num">02</span><span class="name">Hollow &middot; Part 2 &mdash; The Courtyard</span>
+      <span class="dots"></span><span class="state">Play</span></a></li>
+    <li><span class="row locked">
+      <span class="num">03</span><span class="name">Hollow &middot; Part 3 &mdash; The Underground</span>
+      <span class="dots"></span><span class="state">Soon</span></span></li>
     <li><a class="row open" href="center.html">
-      <span class="num">02</span><span class="name">The Center</span>
+      <span class="num">04</span><span class="name">The Center</span>
       <span class="dots"></span><span class="state">Play</span></a></li>
-    <li><span class="row locked">
-      <span class="num">03</span><span class="name">Untitled</span>
-      <span class="dots"></span><span class="state">Empty</span></span></li>
-    <li><span class="row locked">
-      <span class="num">04</span><span class="name">Untitled</span>
-      <span class="dots"></span><span class="state">Empty</span></span></li>
   </ul>
 
   <p class="note" id="note"><kbd>&uarr;</kbd> <kbd>&darr;</kbd> to choose, <kbd>Enter</kbd> to play. Or just click.</p>
