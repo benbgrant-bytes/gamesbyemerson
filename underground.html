@@ -917,26 +917,6 @@ function buildRoom(room){
     }
   }
 
-  if(room.finalRoom){
-    // the way in: two doors, taller than the tunnel, one either side of the opening
-    const bd = [], base = [];
-    for(const sgn of [-1, 1]){
-      const pv = new THREE.Object3D();
-      pv.position.set(room.p.x + perp.x*sgn*0.1, 0, room.p.y + perp.y*sgn*0.1);
-      pv.rotation.y = Math.atan2(perp.x*sgn, perp.y*sgn);
-      const dleaf = new THREE.Mesh(new THREE.BoxGeometry(3.0, 6.2, 0.3), MAT.wood);
-      dleaf.position.set(1.5, 3.1, 0); pv.add(dleaf);
-      for(let i=0;i<4;i++){
-        const band = new THREE.Mesh(new THREE.BoxGeometry(2.9,0.22,0.36), MAT.iron);
-        band.position.set(1.5, 0.8+i*1.5, 0); pv.add(band);
-      }
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.3,0.07,6,12), MAT.brass);
-      ring.position.set(2.75, 2.5, 0.2); ring.rotation.x = Math.PI/2; pv.add(ring);
-      g.add(pv); bd.push(pv); base.push(pv.rotation.y);
-    }
-    room.bigDoors = bd; room.bigBase = base;
-  }
-
   const dp = makeDoor(room);
   g.add(dp[0]); g.add(dp[1]);
   if(room.exitLight) g.add(room.exitLight);
@@ -1539,7 +1519,7 @@ const S = {
   killer:null,
   roam:{on:false, x:0, z:0, gait:0, stepT:0, dist:99, seen:false, tx:0, tz:0, think:0, hit:0},
   xs:{on:false, x:0, z:0, idx:0, gait:0, stepT:0, dist:99, spawned:false, done:false, grace:0},
-  blackout:0, blend:0, ending:0, endPhase:"",
+  blackout:0, blend:0, ending:0, endPhase:"", camShake:0, cineBob:0, lookTarget:0, xsBack:13,
   keys5:0,
   seen:{BURST:false,VORTEX:false,CAMO:false,SCRAPE:false,DARKNESS:false,XSTRUCT:false,LOCK:false}
 };
@@ -1812,24 +1792,21 @@ function interact(){
   if(!S.running || S.dead || S.won) return;
   Snd.resume();
 
-  // at the two big doors: hauling them apart starts the ending
-  if(S.endPhase === "approach"){
-    const r = rooms[CFG.FINAL_ROOM];
-    if(r && Math.hypot(r.p.x-S.pos.x, r.p.y-S.pos.z) < 5.0){
-      S.endPhase = "heave"; S.ending = 0;
-      Snd.creak(); Snd.thud(0.6);
-      say("You get a shoulder behind each one and push.", 3600);
-      return;
-    }
-  }
   if(S.hidden){ leaveCloset(); return; }
   const t = bestTarget();
   if(!t) return;
 
   if(t.kind==="door"){
     const r = t.room;
-    // the exit only opens once the cutscene has walked you to it
-    if(r.finalRoom && S.endPhase && S.endPhase !== "walk" && S.endPhase !== "exit") return;
+    if(r.finalRoom){
+      // the exit waits for the slam. Then it just opens, and you walk out.
+      if(S.endPhase !== "free") return;
+      r.opened = true;
+      walkBoxes.push(doorwayBox(r));
+      S.endPhase = "exit"; S.ending = 0;
+      Snd.creak(); Snd.bell();
+      return;
+    }
     if(r.opened) return;
     if(r.yard){
       if(S.keys5 < CFG.KEYS_NEEDED){
@@ -1906,7 +1883,8 @@ function walkable(x,z){
 
 function updatePlayer(dt){
   // hands off the controls while the ending plays itself out
-  if(S.endPhase && S.endPhase !== "approach"){ S.vel.set(0,0,0); return; }
+  if(S.endPhase === "lookback" || S.endPhase === "slam" ||
+     S.endPhase === "exit" || S.endPhase === "done"){ S.vel.set(0,0,0); return; }
   // keyboard turning, always available and unbounded
   const TURN = 2.5;
   if(held.ArrowLeft)  S.yaw += TURN*dt;
@@ -2224,6 +2202,36 @@ function xsPathDist(){
 function updateXstruct(dt){
   const X = S.xs;
   if(!X.on) return;
+  // once a cutscene is playing it does the driving, not the chase
+  if(S.endPhase && S.endPhase !== "enter"){ return; }
+
+  // once you are in the last room he comes as far as its doorway and no
+  // further: the door has to be able to slam between the two of you
+  if(S.endPhase === "enter" && X.idx >= CFG.FINAL_ROOM - 1){
+    const gate = rooms[CFG.FINAL_ROOM - 1].exitPos;
+    const gx = gate.x - X.x, gz = gate.y - X.z, gl = Math.hypot(gx, gz);
+    if(gl > 1.2){
+      const step = Math.min(gl - 1.2, CFG.XS_SPEED*dt);
+      X.x += gx/gl*step; X.z += gz/gl*step;
+      X.gait += dt*CFG.XS_SPEED*1.4;
+      xstructMesh.rotation.y = Math.atan2(gx/gl, gz/gl);
+    }
+    X.idx = CFG.FINAL_ROOM - 1;
+    xstructMesh.position.set(X.x, Math.abs(Math.sin(X.gait))*0.08, X.z);
+    const LL = xstructMesh.userData, s2 = Math.sin(X.gait);
+    if(LL.legL){
+      LL.legL.rotation.x =  s2*0.6;  LL.legR.rotation.x = -s2*0.6;
+      LL.armL.rotation.x = -s2*0.42; LL.armR.rotation.x =  s2*0.42;
+    }
+    if(LL.gears) for(let i=0;i<LL.gears.length;i++) LL.gears[i].rotation.z += dt*(3.2+i);
+    X.dist = Math.hypot(X.x-S.pos.x, X.z-S.pos.z);
+    X.stepT -= dt;
+    const nr = Math.max(0, 1 - X.dist/26);
+    if(X.stepT <= 0){ X.stepT = 0.40; Snd.step(nr); }
+    Snd.droneSet(0.08 + nr*0.5);
+    UI.near.style.opacity = Math.min(0.9, Math.max(0, 1 - X.dist/11)) * 0.9;
+    return;
+  }
 
   let tx, tz;
   if(X.idx < S.cur){
@@ -2266,7 +2274,7 @@ function updateXstruct(dt){
   Snd.droneSet(0.08 + near*0.5);
   UI.near.style.opacity = Math.min(0.9, Math.max(0, 1 - X.dist/11)) * 0.9;
 
-  if(!S.hidden && X.grace <= 0 && X.idx === S.cur &&
+  if(!S.hidden && !S.endPhase && X.grace <= 0 && X.idx === S.cur &&
      Math.hypot(X.x-S.pos.x, X.z-S.pos.z) < 2.1)
     damage(26*dt, "Xstruct caught up with you.", "XSTRUCT");
 }
@@ -2274,99 +2282,132 @@ function updateXstruct(dt){
 /* ------------------------------ the ending ------------------------------- */
 function reachFinalRoom(){
   if(S.endPhase) return;
-  S.endPhase = "approach";
+  S.endPhase = "enter";
+  S.ending = 0;
   UI.n.textContent = 300;
-  say("Two doors, taller than the tunnel. There is a handle on each.", 5200);
+  say("The tunnel opens out. There is a door at the far end with a light over it.", 5000);
 }
 
-/* The cutscene. First person throughout, so you never see yourself. */
+/* Two cutscenes. First person all the way through, so you never see yourself.
+   The first one fires on its own once you are well into the room. The second
+   is the exit, and you have the controls back in between. */
 function runEnding(dt){
-  if(!S.endPhase || S.endPhase === "approach") return;
+  if(!S.endPhase || S.endPhase === "done") return;
+  const r = rooms[CFG.FINAL_ROOM];
+  if(!r) return;
   S.ending += dt;
-  const T = S.ending;
 
-  if(S.endPhase === "heave"){
-    // you are hauling the doors apart: the view shoves forward and rocks
-    S.pos.x += Math.sin(S.yaw)*0 ;
-    S.camShake = Math.sin(T*22)*0.02*Math.max(0, 1-T/2.2);
-    const r = rooms[CFG.FINAL_ROOM];
-    if(r && r.bigDoors){
-      const k = Math.min(1, T/2.2);
-      r.bigDoors[0].rotation.y = r.bigBase[0] - k*1.25;
-      r.bigDoors[1].rotation.y = r.bigBase[1] + k*1.25;
+  if(S.endPhase === "enter"){
+    // how far in you have come, measured along the room off the near wall
+    const into = (S.pos.x - r.p.x)*r.d.x + (S.pos.z - r.p.y)*r.d.y;
+    const close = S.xs.on && S.xs.idx >= CFG.FINAL_ROOM - 1 &&
+                  Math.hypot(S.xs.x - S.pos.x, S.xs.z - S.pos.z) < 5.2;
+    // halfway in takes the controls off you. Three ways to fire it, so it
+    // cannot be walked past the way the two big doors could be.
+    if(into > r.along*0.45 || close || S.ending > 14){
+      S.endPhase = "lookback"; S.ending = 0;
+      S.lookTarget = Math.atan2(r.d.x, r.d.y);   // back toward the way you came
+      // never let the door slam on top of you: stand clear of the opening
+      if(into < 2.6){
+        S.pos.x = r.p.x + r.d.x*2.6;
+        S.pos.z = r.p.y + r.d.y*2.6;
+      }
+      // pick him up where he actually is, so he does not jump down the tunnel
+      const bx = S.xs.x - r.p.x, bz = S.xs.z - r.p.y;
+      S.xsBack = Math.max(3.6, Math.min(13.0, -(bx*r.d.x + bz*r.d.y)));
+      if(xstructMesh) xstructMesh.visible = true;
+      S.cineBob = 0;
+      Snd.droneSet(0.75);
+      say("Something behind you makes you turn round.", 3200);
     }
-    if(T > 2.2){ S.endPhase = "lookback"; S.ending = 0; S.lookTarget = S.yaw + Math.PI; Snd.thud(0.8); }
+    return;
   }
 
-  else if(S.endPhase === "lookback"){
-    // the view turns itself round. Xstruct is coming down the tunnel.
-    const k = Math.min(1, S.ending/1.3);
-    S.yaw += (S.lookTarget - S.yaw) * Math.min(1, dt*4.5);
-    if(S.xs.spawned){
+  const T = S.ending;
+
+  if(S.endPhase === "lookback"){
+    // the view turns itself round
+    let a = S.lookTarget - S.yaw;
+    while(a >  Math.PI) a -= Math.PI*2;
+    while(a < -Math.PI) a += Math.PI*2;
+    S.yaw   += a * Math.min(1, dt*3.4);
+    S.pitch += (0 - S.pitch) * Math.min(1, dt*3.0);
+
+    // and he comes up the tunnel at you
+    const k = Math.min(1, T/2.0);
+    const back = S.xsBack - k*(S.xsBack - 1.4);
+    if(xstructMesh){
       xstructMesh.visible = true;
-      const r = rooms[CFG.FINAL_ROOM];
-      const d = 16 - k*11;
-      xstructMesh.position.set(r.p.x - r.d.x*d, 0, r.p.y - r.d.y*d);
+      xstructMesh.position.set(r.p.x - r.d.x*back, Math.abs(Math.sin(T*11))*0.08,
+                               r.p.y - r.d.y*back);
       xstructMesh.rotation.y = Math.atan2(r.d.x, r.d.y);
-      const L = xstructMesh.userData;
+      const L = xstructMesh.userData, sw = Math.sin(T*12);
+      if(L.legL){
+        L.legL.rotation.x =  sw*0.70; L.legR.rotation.x = -sw*0.70;
+        L.armL.rotation.x = -sw*0.50; L.armR.rotation.x =  sw*0.50;
+      }
       if(L.gears) for(let i=0;i<L.gears.length;i++) L.gears[i].rotation.z += dt*9;
-      if(L.legL){ const sw=Math.sin(S.ending*13); L.legL.rotation.x=sw*0.75; L.legR.rotation.x=-sw*0.75; }
     }
-    Snd.droneSet(0.2 + k*0.6);
-    if(S.ending > 1.35){
+    if(T < 1.95 && (T % 0.34) < dt) Snd.step(0.5 + k*0.4);
+    Snd.droneSet(0.30 + k*0.60);
+    S.camShake = Math.sin(T*17)*0.007*k;
+
+    if(T > 2.05){
+      // the moment he reaches the room it goes shut in front of him
       S.endPhase = "slam"; S.ending = 0;
-      const r = rooms[CFG.FINAL_ROOM];
-      if(r && r.bigDoors){ r.bigDoors[0].rotation.y = r.bigBase[0]; r.bigDoors[1].rotation.y = r.bigBase[1]; }
-      xstructMesh.visible = false;
+      const prev = rooms[CFG.FINAL_ROOM - 1];
+      if(prev){ prev.opened = false; prev.slamming = true; }
+      if(xstructMesh) xstructMesh.visible = false;
       stopXstruct();
-      Snd.thud(1.0); Snd.thud(0.9);
-      UI.fade.style.opacity = 1;
-      say("The doors go shut on their own.", 3400);
+      stream();                       // and the doorway stops being walkable
+      Snd.thud(1.0);
+      S.camShake = 0.055;
+      say("The door goes shut in front of him.", 3600);
     }
   }
 
   else if(S.endPhase === "slam"){
-    // black, with something hitting the far side of the doors
-    if(S.ending > 0.9 && S.ending < 1.0) Snd.thud(0.45);
-    if(S.ending > 1.7 && S.ending < 1.8) Snd.thud(0.33);
-    if(S.ending > 2.5 && S.ending < 2.6) Snd.thud(0.22);
-    if(S.ending > 3.4){
-      S.endPhase = "walk"; S.ending = 0;
-      const r = rooms[CFG.FINAL_ROOM];
-      S.pos.set(r.center.x - r.d.x*6, 0, r.center.y - r.d.y*6);
-      S.yaw = Math.atan2(-r.d.x, -r.d.y);
-      UI.fade.style.opacity = 0;
-      say("Banging, behind you, getting further away.", 4000);
+    // banging on the far side of it, getting further away
+    if(T > 0.75 && T < 0.83) Snd.thud(0.42);
+    if(T > 1.55 && T < 1.63) Snd.thud(0.30);
+    if(T > 2.35 && T < 2.43) Snd.thud(0.19);
+    S.camShake = Math.sin(T*30)*0.014*Math.max(0, 1 - T/1.1);
+    Snd.droneSet(Math.max(0, 0.45 - T*0.17));
+    if(T > 3.0){
+      const prev = rooms[CFG.FINAL_ROOM - 1];
+      if(prev) prev.slamming = false;
+      S.endPhase = "free"; S.ending = 0;
+      S.camShake = 0;
+      Snd.droneStop();
+      say("EXIT. Straight ahead of you.", 4200);
     }
   }
 
-  else if(S.endPhase === "walk"){
-    // the view carries you to the exit on its own
-    const r = rooms[CFG.FINAL_ROOM];
-    const tx = r.exitPos.x - r.nd.x*2.6, tz = r.exitPos.y - r.nd.y*2.6;
-    const dx = tx-S.pos.x, dz = tz-S.pos.z, d = Math.hypot(dx,dz);
-    if(d > 0.25){
-      const st = Math.min(d, 2.3*dt);
-      S.pos.x += dx/d*st; S.pos.z += dz/d*st;
-      S.bob += dt*5.5;
-      S.yaw += (Math.atan2(-dx,-dz) - S.yaw) * Math.min(1, dt*3);
-    } else if(S.ending > 1.0){
-      S.endPhase = "exit"; S.ending = 0;
-      Snd.chime ? Snd.chime() : Snd.bell();
-      say("EXIT.", 3000);
-    }
+  else if(S.endPhase === "free"){
+    // the controls are yours. Walk to the exit and open it yourself.
+    S.camShake = 0;
+    return;
   }
 
   else if(S.endPhase === "exit"){
-    // the exit swings wide and the light comes in
-    const r = rooms[CFG.FINAL_ROOM];
-    const k = Math.min(1, S.ending/2.0);
-    if(r.doorPivot) r.doorPivot.rotation.y = r.baseRot + k*1.7;
+    // it is already swinging open. The light comes in and you walk out.
+    const k = Math.min(1, T/1.8);
     if(r.exitLight) r.exitLight.intensity = k*14;
-    UI.white.style.opacity = Math.max(0, (S.ending-1.4)/1.8);
-    const fwd = 1.7*dt*Math.min(1,(S.ending-0.6)/0.6);
-    if(S.ending > 0.6){ S.pos.x -= Math.sin(S.yaw)*fwd; S.pos.z -= Math.cos(S.yaw)*fwd; S.bob += dt*4.5; }
-    if(S.ending > 3.4){ S.endPhase = "done"; win(); }
+    UI.white.style.opacity = Math.max(0, (T-1.3)/1.9);
+    S.cineBob = 0.85;
+    if(T > 0.5){
+      const fwd = 1.8*dt*Math.min(1, (T-0.5)/0.6);
+      S.pos.x -= Math.sin(S.yaw)*fwd;
+      S.pos.z -= Math.cos(S.yaw)*fwd;
+      S.bob += dt*4.6;
+    }
+    // hold the view level and square on the opening
+    let a = Math.atan2(-r.nd.x, -r.nd.y) - S.yaw;
+    while(a >  Math.PI) a -= Math.PI*2;
+    while(a < -Math.PI) a += Math.PI*2;
+    S.yaw   += a * Math.min(1, dt*2.4);
+    S.pitch += (0 - S.pitch) * Math.min(1, dt*2.4);
+    if(T > 3.4){ S.endPhase = "done"; S.cineBob = 0; win(); }
   }
 }
 
@@ -2569,7 +2610,7 @@ function frame(now){
     const r = rooms[i];
     if(r.doorPivot){
       const tgt = r.opened ? 1.88 : 0;
-      r.doorAngle += (tgt - r.doorAngle)*Math.min(1, dt*5.5);
+      r.doorAngle += (tgt - r.doorAngle)*Math.min(1, dt*(r.slamming ? 30 : 5.5));
       r.doorPivot.rotation.y = r.baseRot + r.doorAngle;
     }
     for(let k=0;k<r.lockers.length;k++){
@@ -2591,7 +2632,9 @@ function frame(now){
     camera.position.set(S.hidden.pos.x, 1.45 + Math.sin(S.t*2.1)*0.012, S.hidden.pos.y);
   } else {
     const speed = Math.hypot(S.vel.x, S.vel.z);
-    camera.position.set(S.pos.x, CFG.EYE + Math.sin(S.bob)*0.045*Math.min(1,speed/4), S.pos.z);
+    const amp = Math.min(1, Math.max(speed/4, S.cineBob));
+    const sh = S.camShake;
+    camera.position.set(S.pos.x + sh, CFG.EYE + Math.sin(S.bob)*0.045*amp + sh*0.6, S.pos.z);
   }
   camera.rotation.set(S.pitch, S.yaw, 0);
 
@@ -2629,19 +2672,16 @@ function frame(now){
   updateLookHint();
 
   let label = null;
-  if(S.endPhase === "approach"){
-    const r = rooms[CFG.FINAL_ROOM];
-    if(r && Math.hypot(r.p.x-S.pos.x, r.p.y-S.pos.z) < 5.0) label = "Heave them open";
-  }
-  else if(S.hidden) label = "Step out";
+  if(S.hidden) label = "Step out";
   else {
     const t = bestTarget();
     if(t){
       if(t.kind==="door"){
         const r = t.room;
-        if(!r.opened) label = r.locked
-          ? (S.keys>0 ? "Unlock door "+(r.i+1) : "Locked \u00b7 door "+(r.i+1))
-          : "Open door "+(r.i+1);
+        if(r.finalRoom){ if(!r.opened) label = "Open the exit"; }
+        else if(!r.opened) label = r.locked
+          ? (S.keys>0 ? "Unlock door "+(r.i+CFG.PLAQUE) : "Locked \u00b7 door "+(r.i+CFG.PLAQUE))
+          : "Open door "+(r.i+CFG.PLAQUE);
       } else if(t.kind==="drawer"){ if(!t.f.searched) label = "Search"; }
       else label = t.label;
     }
@@ -2686,6 +2726,8 @@ function startRun(seed){
   S.roam = {on:false, x:0, z:0, gait:0, stepT:0, dist:99, seen:false, tx:0, tz:0, think:0, hit:0};
   S.xs = {on:false, x:0, z:0, idx:0, gait:0, stepT:0, dist:99, spawned:false, done:false, grace:0};
   S.blackout = 0; S.blend = 0; S.ending = 0; S.endPhase = "";
+  S.camShake = 0; S.cineBob = 0; S.lookTarget = 0; S.xsBack = 13;
+  for(let i=0;i<rooms.length;i++) rooms[i].slamming = false;
   if(darkMesh) darkMesh.visible = false;
   if(xstructMesh) xstructMesh.visible = false;
   S.keys5 = 0; S.heardOnce = false;
